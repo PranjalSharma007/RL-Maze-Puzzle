@@ -1,15 +1,10 @@
 """
-Interactive Tilt-Maze GUI
-- Manual tilt using DearPyGui sliders
-- Toggle RL agent control
-- Ball visible (bright, bigger radius)
+Autonomous Robot Maze Project
+- Fixed maze with walls & boundaries
+- Ball (robot) as agent
+- Drone-like top-down camera
+- GUI with Reset, Manual tilt, RL toggle
 """
-
-import multiprocessing
-try:
-    multiprocessing.set_start_method("spawn", force=True)
-except RuntimeError:
-    pass
 
 import os, time, math
 import numpy as np
@@ -18,10 +13,9 @@ import pybullet_data
 import dearpygui.dearpygui as dpg
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv
-import gymnasium as gym
 from gymnasium import spaces
+import gymnasium as gym
+
 
 MODEL_PATH = "ppo_tilt_maze.zip"
 
@@ -34,15 +28,20 @@ class TiltMazeEnv(gym.Env):
         super().__init__()
         self.client = p.connect(p.GUI if render else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -10, physicsClientId=self.client)
 
-        self.maze_size = 7
-        self.wall_h = 1.0
-        self.goal_pos = np.array([6.5, 6.5], dtype=float)
-        self.start_pos = np.array([0.5, 0.5], dtype=float)
+        self.maze_size = 15
+        self.wall_h = 2.0
+        self.goal_pos = np.array([13.5, 13.5], dtype=float)
+        self.start_pos = np.array([1.5, 1.5], dtype=float)
 
         self._build_maze()
         self.ball = self._spawn_ball()
+
+        # Camera = drone view
+        p.resetDebugVisualizerCamera(cameraDistance=25,
+                                     cameraYaw=90,
+                                     cameraPitch=-89,
+                                     cameraTargetPosition=[self.maze_size/2, self.maze_size/2, 0])
 
         self.observation_space = spaces.Box(
             low=np.array([0, 0, -20, -20], dtype=np.float32),
@@ -53,23 +52,51 @@ class TiltMazeEnv(gym.Env):
 
     def _build_maze(self):
         # Base floor
-        plane = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, self.maze_size/2, 0.05])
+        plane = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, self.maze_size/2, 0.1])
         p.createMultiBody(baseCollisionShapeIndex=plane,
-                          basePosition=[self.maze_size/2, self.maze_size/2, 0])
+                          basePosition=[self.maze_size/2, self.maze_size/2, -0.1])
+
+        # Outer boundary walls
+        thickness = 0.5
+        wall_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, thickness, self.wall_h/2])
+        # bottom
+        p.createMultiBody(baseCollisionShapeIndex=wall_shape,
+                          basePosition=[self.maze_size/2, 0, self.wall_h/2])
+        # top
+        p.createMultiBody(baseCollisionShapeIndex=wall_shape,
+                          basePosition=[self.maze_size/2, self.maze_size, self.wall_h/2])
+        # left
+        wall_shape2 = p.createCollisionShape(p.GEOM_BOX, halfExtents=[thickness, self.maze_size/2, self.wall_h/2])
+        p.createMultiBody(baseCollisionShapeIndex=wall_shape2,
+                          basePosition=[0, self.maze_size/2, self.wall_h/2])
+        # right
+        p.createMultiBody(baseCollisionShapeIndex=wall_shape2,
+                          basePosition=[self.maze_size, self.maze_size/2, self.wall_h/2])
+
+        # Inner maze walls (fixed layout, simple corridors)
+        def add_wall(x, y, dx, dy):
+            shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[dx/2, dy/2, self.wall_h/2])
+            p.createMultiBody(baseCollisionShapeIndex=shape,
+                              basePosition=[x + dx/2, y + dy/2, self.wall_h/2])
+
+        # Example: add corridors (you can expand with more for a real maze)
+        add_wall(3, 0, 0.5, 10)   # vertical
+        add_wall(7, 5, 0.5, 10)   # vertical
+        add_wall(0, 7, 10, 0.5)   # horizontal
+        add_wall(5, 12, 10, 0.5)  # horizontal
 
         # Goal marker
-        goal_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.3, length=0.05, rgbaColor=[0,1,0,0.6])
+        goal_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.5, length=0.05, rgbaColor=[0,1,0,0.6])
         p.createMultiBody(baseVisualShapeIndex=goal_vis,
                           basePosition=[*self.goal_pos, 0.05])
 
     def _spawn_ball(self):
-        coll = p.createCollisionShape(p.GEOM_SPHERE, radius=0.25)  # bigger ball
-        vis = p.createVisualShape(p.GEOM_SPHERE, radius=0.25, rgbaColor=[0.9, 0.1, 0.1, 1])
-        ball = p.createMultiBody(baseMass=0.1,
+        coll = p.createCollisionShape(p.GEOM_SPHERE, radius=0.4)
+        vis = p.createVisualShape(p.GEOM_SPHERE, radius=0.4, rgbaColor=[0.9, 0.1, 0.1, 1])
+        return p.createMultiBody(baseMass=0.2,
                                  baseCollisionShapeIndex=coll,
                                  baseVisualShapeIndex=vis,
                                  basePosition=[*self.start_pos, 0.5])
-        return ball
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -102,18 +129,18 @@ class TiltMazeEnv(gym.Env):
 # GUI & Main
 # ---------------------------
 def main():
-    global env
     env = TiltMazeEnv(render=True)
     obs, _ = env.reset()
 
     dpg.create_context()
-    dpg.create_viewport(title="Interactive Tilt-Maze", width=400, height=300)
+    dpg.create_viewport(title="Maze Robot Control", width=400, height=300)
 
     with dpg.window(tag="main_win"):
-        dpg.add_text("Tilt Controls")
+        dpg.add_text("Maze Control Panel")
         dpg.add_slider_float(label="Pitch", tag="pitch", default_value=0.0, min_value=-1.0, max_value=1.0)
         dpg.add_slider_float(label="Roll", tag="roll", default_value=0.0, min_value=-1.0, max_value=1.0)
         dpg.add_checkbox(label="Use RL Agent", tag="rl_cb")
+        dpg.add_button(label="Reset Robot", callback=lambda: env.reset())
 
     dpg.setup_dearpygui()
     dpg.show_viewport()
