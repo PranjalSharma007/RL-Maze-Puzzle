@@ -27,7 +27,7 @@ class TiltMazeEnv(gym.Env):
     def __init__(self, render=False):
         super().__init__()
         self.client = p.connect(p.GUI if render else p.DIRECT)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.client)
 
         self.maze_size = 15
         self.wall_h = 2.0
@@ -41,7 +41,8 @@ class TiltMazeEnv(gym.Env):
         p.resetDebugVisualizerCamera(cameraDistance=25,
                                      cameraYaw=90,
                                      cameraPitch=-89,
-                                     cameraTargetPosition=[self.maze_size/2, self.maze_size/2, 0])
+                                     cameraTargetPosition=[self.maze_size/2, self.maze_size/2, 0],
+                                     physicsClientId=self.client)
 
         self.observation_space = spaces.Box(
             low=np.array([0, 0, -20, -20], dtype=np.float32),
@@ -52,32 +53,38 @@ class TiltMazeEnv(gym.Env):
 
     def _build_maze(self):
         # Base floor
-        plane = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, self.maze_size/2, 0.1])
+        plane = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, self.maze_size/2, 0.1], physicsClientId=self.client)
         p.createMultiBody(baseCollisionShapeIndex=plane,
-                          basePosition=[self.maze_size/2, self.maze_size/2, -0.1])
+                          basePosition=[self.maze_size/2, self.maze_size/2, -0.1],
+                          physicsClientId=self.client)
 
         # Outer boundary walls
         thickness = 0.5
-        wall_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, thickness, self.wall_h/2])
+        wall_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[self.maze_size/2, thickness, self.wall_h/2], physicsClientId=self.client)
         # bottom
         p.createMultiBody(baseCollisionShapeIndex=wall_shape,
-                          basePosition=[self.maze_size/2, 0, self.wall_h/2])
+                          basePosition=[self.maze_size/2, 0, self.wall_h/2],
+                          physicsClientId=self.client)
         # top
         p.createMultiBody(baseCollisionShapeIndex=wall_shape,
-                          basePosition=[self.maze_size/2, self.maze_size, self.wall_h/2])
+                          basePosition=[self.maze_size/2, self.maze_size, self.wall_h/2],
+                          physicsClientId=self.client)
         # left
-        wall_shape2 = p.createCollisionShape(p.GEOM_BOX, halfExtents=[thickness, self.maze_size/2, self.wall_h/2])
+        wall_shape2 = p.createCollisionShape(p.GEOM_BOX, halfExtents=[thickness, self.maze_size/2, self.wall_h/2], physicsClientId=self.client)
         p.createMultiBody(baseCollisionShapeIndex=wall_shape2,
-                          basePosition=[0, self.maze_size/2, self.wall_h/2])
+                          basePosition=[0, self.maze_size/2, self.wall_h/2],
+                          physicsClientId=self.client)
         # right
         p.createMultiBody(baseCollisionShapeIndex=wall_shape2,
-                          basePosition=[self.maze_size, self.maze_size/2, self.wall_h/2])
+                          basePosition=[self.maze_size, self.maze_size/2, self.wall_h/2],
+                          physicsClientId=self.client)
 
         # Inner maze walls (fixed layout, simple corridors)
         def add_wall(x, y, dx, dy):
-            shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[dx/2, dy/2, self.wall_h/2])
+            shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[dx/2, dy/2, self.wall_h/2], physicsClientId=self.client)
             p.createMultiBody(baseCollisionShapeIndex=shape,
-                              basePosition=[x + dx/2, y + dy/2, self.wall_h/2])
+                              basePosition=[x + dx/2, y + dy/2, self.wall_h/2],
+                              physicsClientId=self.client)
 
         # Example: add corridors (you can expand with more for a real maze)
         add_wall(3, 0, 0.5, 10)   # vertical
@@ -86,27 +93,29 @@ class TiltMazeEnv(gym.Env):
         add_wall(5, 12, 10, 0.5)  # horizontal
 
         # Goal marker
-        goal_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.5, length=0.05, rgbaColor=[0,1,0,0.6])
+        goal_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.5, length=0.05, rgbaColor=[0,1,0,0.6], physicsClientId=self.client)
         p.createMultiBody(baseVisualShapeIndex=goal_vis,
-                          basePosition=[*self.goal_pos, 0.05])
+                          basePosition=[*self.goal_pos, 0.05],
+                          physicsClientId=self.client)
 
     def _spawn_ball(self):
-        coll = p.createCollisionShape(p.GEOM_SPHERE, radius=0.4)
-        vis = p.createVisualShape(p.GEOM_SPHERE, radius=0.4, rgbaColor=[0.9, 0.1, 0.1, 1])
+        coll = p.createCollisionShape(p.GEOM_SPHERE, radius=0.4, physicsClientId=self.client)
+        vis = p.createVisualShape(p.GEOM_SPHERE, radius=0.4, rgbaColor=[0.9, 0.1, 0.1, 1], physicsClientId=self.client)
         return p.createMultiBody(baseMass=0.2,
                                  baseCollisionShapeIndex=coll,
                                  baseVisualShapeIndex=vis,
-                                 basePosition=[*self.start_pos, 0.5])
+                                 basePosition=[*self.start_pos, 0.5],
+                                 physicsClientId=self.client)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        p.resetBasePositionAndOrientation(self.ball, [*self.start_pos, 0.5], [0,0,0,1])
-        p.resetBaseVelocity(self.ball, [0,0,0], [0,0,0])
+        p.resetBasePositionAndOrientation(self.ball, [*self.start_pos, 0.5], [0,0,0,1], physicsClientId=self.client)
+        p.resetBaseVelocity(self.ball, [0,0,0], [0,0,0], physicsClientId=self.client)
         return self._get_obs(), {}
 
     def _get_obs(self):
-        pos, _ = p.getBasePositionAndOrientation(self.ball)
-        vel, _ = p.getBaseVelocity(self.ball)
+        pos, _ = p.getBasePositionAndOrientation(self.ball, physicsClientId=self.client)
+        vel, _ = p.getBaseVelocity(self.ball, physicsClientId=self.client)
         return np.array([pos[0], pos[1], vel[0], vel[1]], dtype=np.float32)
 
     def step(self, action):
@@ -114,10 +123,10 @@ class TiltMazeEnv(gym.Env):
         roll_deg  = np.clip(action[1] * 15, -15, 15)
         gx = -9.8 * math.sin(math.radians(roll_deg))
         gy =  9.8 * math.sin(math.radians(pitch_deg))
-        p.setGravity(gx, gy, -9.8)
+        p.setGravity(gx, gy, -9.8, physicsClientId=self.client)
 
         for _ in range(4):
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.client)
 
         return self._get_obs(), 0.0, False, False, {}
 
