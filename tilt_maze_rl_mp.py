@@ -1,9 +1,9 @@
 """
 Autonomous Robot Maze Project
-- Fixed maze with walls & boundaries
-- Ball (robot) as agent
-- Drone-like top-down camera
-- GUI with Reset, Manual tilt, RL toggle
+-> Fixed maze with walls & boundaries
+-> Ball (robot) as agent
+-> Drone-like top-down camera
+-> GUI with Reset, Manual tilt, RL toggle
 """
 
 import os, time, math
