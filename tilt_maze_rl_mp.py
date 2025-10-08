@@ -136,7 +136,7 @@ class TiltMazeEnv(gym.Env):
 
 # -------------------------
 # GUI & Main
-# -------------------------
+# ------------------------
 def main():
     env = TiltMazeEnv(render=True)
     obs, _ = env.reset()
