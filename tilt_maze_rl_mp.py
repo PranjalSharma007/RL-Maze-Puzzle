@@ -22,7 +22,7 @@ MODEL_PATH = "ppo_tilt_maze.zip"
 
 # -------------------------
 #  TiltMazeEnvironment
-# --------------------------
+# -------------------------
 class TiltMazeEnv(gym.Env):
     def __init__(self, render=False):
         super().__init__()
