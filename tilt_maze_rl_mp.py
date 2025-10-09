@@ -20,7 +20,7 @@ import gymnasium as gym
 MODEL_PATH = "ppo_tilt_maze.zip"
 
 
-# --------------------------
+# -------------------------
 #  TiltMazeEnvironment
 # --------------------------
 class TiltMazeEnv(gym.Env):
